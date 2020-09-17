@@ -1,0 +1,448 @@
+'CR6 Series Datalogger
+'Copyright (c) 2020 Washington State University. Adapted with permission.
+
+'Date: August 2020
+'Program author: Zhongming Gao 
+'CR3000 for Soil sensors (S.CR6)
+
+'The following sensors are measured:
+'LI190R quantum (PAR) sensor                x  1
+'SI-111                                     x  1
+'TCAV temp probe                            x  2
+'CS655 soil temp & water content probe      x  14
+'HFP heat flux plate                        x  6
+'GPS                                        x  1
+'AM25T      				                        x  1
+
+'Abbreviations in comments and variables
+'CR1K   CR1000X
+'CSAT   CSAT3A or CSAT3B
+'sonic  CSAT3A or CSAT3B
+'CS6XX  CS616, CS650, or CS655
+'CS65X  CS650 or CS655
+'cumul  cumulative
+'dia    diameter
+'diag   dignosis
+'dir    direction
+'dist   distance
+'flg    flag
+'FP     footprint
+'Freq   frequency
+'FW     FW05, FW1, or FW3. FW is an abbreviation for fine wire thermocouple
+'intrst interest
+'IRGA   LI7500, LI7500A, or LI7500RS InfraRed Gas Analyzer
+'nmbr   number
+'pct    percent
+'Pyran  pyranometer
+'RH     relative humidity
+'rng    range
+'QC     quality control or quality classification
+'shf    soil heat flux
+'shfp   soil heat flux plate
+'sig    signal
+'strgth strength
+'within win
+'wnd    wind
+'wtr    water
+'hfp01xx HFP01 or HFP01SC soil heat flux plate sensor
+
+'*** Unit Definitions ***
+'SYMBOL      UNIT
+'C           Celsius
+'degrees     angle degrees
+'frac_v_wtr  Fraction volumetric water content
+'g           grams
+'J           Joules
+'Hz          Hertz
+'kg          kilograms
+'kPa         kilopascals
+'m           meters
+'mg          milligrams
+'mmol        millimole
+'mol         mole
+'ms          millisecond
+'s           seconds
+'umol        micromoles
+'usecond     microsecond
+'V           volts
+'W           Watts
+
+
+PipeLineMode
+
+'---------------------------------------------
+' Declare Constants
+'---------------------------------------------
+Const SCN_INTV                   = 3000          'Unique: measurement rate 100 ms (10 Hz), 200 ms (5 Hz), or 1000 ms (1 Hz)
+Const SLW_SCN_INTV               = 3000          'Unique: slow sequence measurement rate (ms) >3000 ms and <6000ms (Note: SDI-12 sensors too slow for sub-second intervals)
+Const OUTPUT_INTV                = 30            'Unique: online flux data output interval (minutes).
+Const DAY_RMET_CRD               = 30            'Unique: number of days of Flux and Flux_Notes table data to store in each file on the card.  Number of files stored depends on card size.
+Const DAY_TSRS_CRD               = 1             'Unique: number of days of Time_Series table data to store in each file on the card (days). Number of files stored depends on card size.
+
+Const ANALOG_INTEGRATION         = 60         'Unique: slowsequence analog measurement integration time, _60Hz (e.g. in US, Canada, etc.) or _50Hz (e.g. in Europe, China, etc.)
+
+Const NMBR_DAY_CPU               = 7             'Number of days for flux data to store on the CPU.
+Const FLUX_SIZE_CPU              = Ceiling ((NMBR_DAY_CPU*1440)/OUTPUT_INTV) 'Size of flux data table on CPU [(days*1440 minutes/day)/(minutes/record)] = records].
+
+Const T_0C_K  = 273.15             'Temperature in K when it is zero in C
+
+'AM25T      				    x  1
+Const AM25T_DiffChan             =  U3         'AM25T Common high & low
+Const AM25T_ClkPort              =  U5         'AM25T Clock
+Const AM25T_ResPort              =  U6         'AM25T Reset
+Const AM25T_ExChan               =  U7         'AM25T PRT excitation
+
+'SI-111                                     x  1
+Const SI111_EXCITATION    = U9         'Voltage excitation channel for SI-111 sensor
+Const SI111_BODY_ANALOG_INPUT  = U10   'Single-ended analog input channel for SI-111 body temperature
+Const SI111_ANALOG_INPUT  = U11        'Differential analog input channel for SI-111 sensor
+
+Const m0_SI111 =  1.30550e9       'Unique: calbration m0
+Const m1_SI111 =  8.0856e6        'Unique: calbration m1
+Const m2_SI111 =  52135.8         'Unique: calbration m2
+Const b0_SI111 = -9.85204e5       'Unique: calbration b0
+Const b1_SI111 = -5.12791e5       'Unique: calbration b1
+Const b2_SI111 =  30645.3         'Unique: calbration b2
+
+'CS655 soil temp & water content probe      x  14
+Const CS655_SDI12_PORT_S1      = C1        'Control port.
+Const CS655_SDI12_PORT_S2      = C3        'Control port.
+Const CS655_SDI12_Address_S1    = 1        'Unique: SDI address for CS655 #1
+Const CS655_SDI12_Address_S2    = 1        'Unique: SDI address for CS655 #1
+Const NMBR_CS655                = 7
+
+'LI190R quantum (PAR) sensor                x  1 @AM25T
+Const QUANTUM_ANALOG_INPUT  = 1     'Differential analog input channel for quantum PAR sensor
+Const QUANTUM_SENS          = 7.01  'uA per 1000 umol/m^2/s
+Const QUANTUM_MULT          = 1000/(QUANTUM_SENS*0.604)   'Unique: multiplier (1000 C) for quantum PAR sensor.
+Const QUANTUM_OFFSET        = 0     'Unique: offset for for quantum PAR sensor.
+
+'TCAV temp probe                            x  2 @ AM25T
+Const TCAV_ANALOG_INPUT = 2          'Staring differential analog input channel for TCAV.
+
+'HFP heat flux plate                        x  6 @ AM25T
+Const SHF_ANALOG_INPUT_S1 = 4           'Starting differential analog input channel.
+Const SHF_ANALOG_INPUT_S2 = 7           'Starting differential analog input channel.
+Const SHF_HEATER_ANALOG_INPUT_S2 = 12   'Starting differential analog input channel to measure the heater of HFP01SC #1.
+Const SHFP_1_SENS_S1  =  64.4       'uV/W/m^2
+Const SHFP_2_SENS_S1  =  62.5       'uV/W/m^2
+Const SHFP_3_SENS_S1  =  62.18
+Const SHFP_1_SENS_S2  =  59.6
+Const SHFP_2_SENS_S2  =  58.4
+Const SHFP_3_SENS_S2  =  59.1
+
+
+Const CAL_INTERVAL = 1440                'Unique:  HFP01SC insitu calibration interval (minutes).
+Const END_CAL      = OUTPUT_INTV - 1 'End HFP01SC insitu calibration one minute before the next output.
+Const NMBR_SHFP    = 3 
+Dim shf_mV(NMBR_SHFP)                    'Voltage measured from soil heat flux plates
+Dim shf_mV_run(NMBR_SHFP)                'Running mean of shf_mV
+Dim shf_mV_0(NMBR_SHFP)                  'Running mean of shf_mV at the beginning of calibration
+Dim shf_mV_180(NMBR_SHFP)                'Running mean of shf_mV after 180 seconds since the beginning of calibration
+Dim shf_mV_end(NMBR_SHFP)                'Running mean of shf_mV at the end of calibration
+Dim V_Rf(NMBR_SHFP)                      'Reference voltage
+Dim V_Rf_run(NMBR_SHFP)                  'Running mean of reference voltage
+Dim V_Rf_180(NMBR_SHFP)                  'Running mean of reference voltage after 180 seconds since the beginning of calibration
+Dim shf_cal_on_f As Boolean
+Dim sw12_1_state As Boolean              'State of the switched 12Vdc port 1.
+
+'GPS                                        x  1
+Const GPS16X_COM = COMU1        'Serial port for GPS16X with PPS
+Const UTC_OFFSET = -8        'local time offset from UTC, in hours
+Const MAX_CLOCK_DRIFT = 1.0  'max clock drift permitted before setting clock, in msec
+
+
+'--------------------------------------------------------
+' Declare Variables, Aliases, and Units
+'---------------------------------------------------------
+'LI190R quantum (PAR) sensor                x  1
+Public PAR_density_S
+Units  PAR_density_S = umol/(s m^2)
+
+'SI-111                                     x  1
+Public T_SI111_targeted      'Temperature of surface that SI111 targets
+Public T_SI111_body          'Temperature of SI111 sensor body
+Units  T_SI111_targeted = C
+Units  T_SI111_body     = C
+
+Dim m_SI111, b_SI111         'Multipler and offset in equation to calculate temperature of targeted surface using measured voltage and SI111 body temperature
+
+'HFP heat flux plate                        x  6
+Dim shf_plate_cal_S1(NMBR_SHFP)           'Hold calibiration of soil heat flux plates
+Dim shf_plate_cal_S2(NMBR_SHFP)           'Hold calibiration of soil heat flux plates
+
+Public shf_plate_S1(NMBR_SHFP)            'Soil heat flux through soil heat flux plates
+Public shf_plate_S2(NMBR_SHFP)            'Soil heat flux through soil heat flux plates
+Units shf_plate_S1 = W/m^2
+Units shf_plate_S2 = W/m^2
+
+'CS655 soil temp & water content probe      x  14
+Public cs655_wc_S1(NMBR_CS655)            'Volumetric soil water content.
+Public cs655_ec_S1(NMBR_CS655)            'Electrical conductivity.
+Public cs655_tmpr_S1(NMBR_CS655)          'CS65X probe temperature.
+Public cs655_wc_S2(NMBR_CS655)            'Volumetric soil water content.
+Public cs655_ec_S2(NMBR_CS655)            'Electrical conductivity.
+Public cs655_tmpr_S2(NMBR_CS655)          'CS65X probe temperature.
+Dim cs655_raw_S1(3)                       'Hold CS65X raw variables
+Dim cs655_raw_S2(3)                       'Hold CS65X raw variables
+Units cs655_wc_S1 = frac_v_wtr
+Units cs655_ec_S1 = dS/m
+Units cs655_tmpr_S1 = C
+Units cs655_wc_S2 = frac_v_wtr
+Units cs655_ec_S2 = dS/m
+Units cs655_tmpr_S2 = C
+
+'TCAV temp probe                            x  2 @ AM25T
+Public Tsoil(2)                            'TCAV soil temperature.
+Alias Tsoil(1) = Tsoil_S1            
+Alias Tsoil(2) = Tsoil_S2                                
+Units Tsoil = C
+
+'GPS                                        x  1
+Dim nmea_sentence(2) As String * 100
+
+Public gps_data(15)
+Alias gps_data(1) = latitude_deg            'Degrees latitude (+ = East; - = West)
+Alias gps_data(2) = latitude_min            'Decimal minutes latitude
+Alias gps_data(3) = longitude_deg           'Degress longitude (+ = East; - = West)
+Alias gps_data(4) = longitude_min           'Decimal minutes longitude
+Alias gps_data(5) = speed                   'Speed
+Alias gps_data(6) = course                  'Course over ground
+Alias gps_data(7) = magnetic_variation      'Magnetic variation from true north (+ = East; - = West)
+Alias gps_data(8) = fix_quality             'GPS fix quality: 0 = invalid, 1 = GPS, 2 = 'differential GPS, 6 = estimated
+Alias gps_data(9) = nmbr_satellites         'Number of satellites used for fix
+Alias gps_data(10) = altitude               'Antenna altitude
+Alias gps_data(11) = pps                    'Elapsed ms since last pulse per second (PPS) from GPS
+Alias gps_data(12) = dt_since_gprmc         'Time since last GPRMC string, normally less than '1 second
+Alias gps_data(13) = gps_ready              'Counts from 0 to 10, 10 = ready
+Alias gps_data(14) = max_clock_change       'Maximum value the clock was changed
+Alias gps_data(15) = nmbr_clock_change      'Number of times the clock was changed
+Units latitude_deg = degreesN
+Units latitude_min = minutesN
+Units longitude_deg = degreesE
+Units longitude_min = minutesE
+Units speed = m/s
+Units course = degreesEofN
+Units magnetic_variation = degreesEofN
+Units fix_quality = unitless
+Units nmbr_satellites = unitless
+Units altitude = m
+Units pps = ms
+Units dt_since_gprmc = s
+Units gps_ready = unitless
+Units max_clock_change = ms
+Units nmbr_clock_change = occurrences
+
+'Battery voltage and panel temp
+Public BattV
+Public PTemp_C
+Public RTemp_C
+Units  BattV = Volts
+Units  PTemp_C = degC
+Units  RTemp_C = degC
+
+Dim i_slow        As Long
+
+'---------------------------------------------
+' Define Output Data Tables
+'---------------------------------------------
+'Meterological data
+DataTable (RMet_1Min, TRUE, -1)
+  DataInterval (0,1,Min,10)
+  TableFile ("CRD:"&Status.SerialNumber(1,1)&".Met_1Min", 64, -1, 0, DAY_RMET_CRD, Day, 0, 0)
+
+  'LI190R
+  Sample  (1, PAR_density_S, IEEE4)
+  Sample (1, QUANTUM_SENS, FP2)
+
+  'SI-111                                     x  1
+  Sample  (1, T_SI111_targeted, IEEE4)
+  Sample  (1, T_SI111_body,     IEEE4)
+
+  'HFP heat flux plate                        x  6
+  Sample (NMBR_SHFP, shf_plate_S1(1), IEEE4)                                    'Heat flux through a soil heat flux plate
+  Sample (NMBR_SHFP, shf_plate_cal_S1, FP2)
+  Sample (NMBR_SHFP, shf_plate_S2(1), IEEE4)                                    'Heat flux through a soil heat flux plate
+  Sample (NMBR_SHFP, shf_plate_cal_S2, FP2)
+
+  'TCAV temp probe                            x  2 @ AM25T
+  Sample (2, Tsoil(1), IEEE4)
+
+  'CS655 soil temp & water content probe      x  14
+  Sample (7, cs655_wc_S1(1),  IEEE4)            'Volumetric soil water content.
+  Sample (7, cs655_ec_S1(1),  IEEE4)            'Electrical conductivity.
+  Sample (7, cs655_tmpr_S1(1),IEEE4)            'CS65X probe temperature.
+
+  Sample (7, cs655_wc_S2(1),  IEEE4)            'Volumetric soil water content.
+  Sample (7, cs655_ec_S2(1),  IEEE4)            'Electrical conductivity.
+  Sample (7, cs655_tmpr_S2(1),IEEE4)            'CS65X probe temperature.
+
+  Average (1,PTemp_C,IEEE4,False)
+  Average (1,RTemp_C,IEEE4,False)
+  Average (1,BattV,IEEE4,False)
+
+
+EndTable
+
+'Status data
+DataTable (Stats_30Min, TRUE, -1)
+  DataInterval (0,30,Min,10)
+  TableFile ("CRD:"&Status.SerialNumber(1,1)&".Stats_30Min", 64, -1, 0, DAY_RMET_CRD, Day, 0, 0)
+
+  'LI190R
+  Average  (1, PAR_density_S, IEEE4,False)
+  Sample (1, QUANTUM_SENS, FP2)
+
+  'SI-111                                     x  1
+  Average  (1, T_SI111_targeted, IEEE4, False)
+  Average  (1, T_SI111_body,     IEEE4, False)
+
+  'HFP heat flux plate                        x  6
+  Average (NMBR_SHFP, shf_plate_S1(1), IEEE4, False)                                    'Heat flux through a soil heat flux plate
+  Average (NMBR_SHFP, shf_plate_cal_S1, FP2,False)
+  Average (NMBR_SHFP, shf_plate_S2(1), IEEE4, False)                                    'Heat flux through a soil heat flux plate
+  Average (NMBR_SHFP, shf_plate_cal_S2, FP2, False)
+
+  'TCAV temp probe                            x  2 @ AM25T
+  Average (2, Tsoil(1), IEEE4, False)
+
+  'CS655 soil temp & water content probe      x  14
+  Average (7, cs655_wc_S1(1),  IEEE4, False)            'Volumetric soil water content.
+  Average (7, cs655_ec_S1(1),  IEEE4, False)            'Electrical conductivity.
+  Average (7, cs655_tmpr_S1(1),IEEE4, False)            'CS65X probe temperature.
+
+  Average (7, cs655_wc_S2(1),  IEEE4, False)            'Volumetric soil water content.
+  Average (7, cs655_ec_S2(1),  IEEE4, False)            'Electrical conductivity.
+  Average (7, cs655_tmpr_S2(1),IEEE4, False)            'CS65X probe temperature.
+
+  Average (1,PTemp_C,IEEE4,False)
+  Average (1,RTemp_C,IEEE4,False)
+  Average (1,BattV,IEEE4,False)
+
+EndTable
+
+
+'---------------------------------------------
+' MAIN PROGRAM 
+'---------------------------------------------
+BeginProg
+
+'Load calibrations of soil heat flux plate.
+shf_plate_cal_S1(1) = 1000/SHFP_1_SENS_S1
+shf_plate_cal_S1(2) = 1000/SHFP_3_SENS_S1
+shf_plate_cal_S1(3) = 1000/SHFP_2_SENS_S1
+
+shf_plate_cal_S2(1) = 1000/SHFP_1_SENS_S2
+shf_plate_cal_S2(2) = 1000/SHFP_3_SENS_S2
+shf_plate_cal_S2(3) = 1000/SHFP_2_SENS_S2
+
+Move (cs655_wc_S1,7,NaN,1)
+Move (cs655_ec_S1,7,NaN,1)
+Move (cs655_tmpr_S1,7,NaN,1)
+Move (cs655_wc_S2,7,NaN,1)
+Move (cs655_ec_S2,7,NaN,1)
+Move (cs655_tmpr_S2,7,NaN,1)
+
+'Set 3.3 VDC for pps
+PortPairConfig (U1, 2)
+
+Scan (SCN_INTV,mSec,10,0)
+  'GPS16X-HVS
+  GPS (gps_data(1),GPS16X_COM,UTC_OFFSET*3600,MAX_CLOCK_DRIFT,nmea_sentence(1))
+
+  PanelTemp (PTemp_C,ANALOG_INTEGRATION) 'Measure data logger panel temperature  
+  Battery (BattV)         'Measure battery voltage.
+
+  'TCAV
+  AM25T(Tsoil(1),2,mV200,TCAV_ANALOG_INPUT,AM25T_DiffChan,TypeE,RTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
+
+  'HFP01
+  AM25T(shf_plate_S1(1),NMBR_SHFP,mV200,SHF_ANALOG_INPUT_S1,AM25T_DiffChan,-1,RTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
+  For i_slow = 1 To NMBR_SHFP
+    shf_plate_S1(i_slow) = shf_plate_S1(i_slow)*shf_plate_cal_S1(i_slow)
+  Next i_slow
+
+  'SI-111
+  'Measure SI111 body temperature
+  Therm109 (T_SI111_body, 1, SI111_BODY_ANALOG_INPUT, SI111_EXCITATION, 0, ANALOG_INTEGRATION, 1.0, 0)     'T_SI111_body in C
+  m_SI111 = m0_SI111 + m1_SI111*T_SI111_body + m2_SI111*T_SI111_body*T_SI111_body                         'T_SI111_body in C
+  b_SI111 = b0_SI111 + b1_SI111*T_SI111_body + b2_SI111*T_SI111_body*T_SI111_body                         'T_SI111_body in C
+
+  VoltDiff (T_SI111_targeted, 1, mV200, SI111_ANALOG_INPUT, True, 0, ANALOG_INTEGRATION, 1, 0)
+  T_SI111_targeted = ((T_SI111_body + T_0C_K)^4 + m_SI111*T_SI111_targeted + b_SI111)^0.25 - T_0C_K       'T_SI111_targeted in C
+
+  'HFP01SC
+  AM25T(shf_mV(1),NMBR_SHFP,mV200,SHF_ANALOG_INPUT_S2,AM25T_DiffChan,-1,RTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
+
+  'Apply HFP01SC soil heat flux plate calibration.
+  For i_slow = 1 To NMBR_SHFP
+    shf_plate_S2(i_slow) = shf_mV(i_slow)*shf_plate_cal_S2(i_slow)
+  Next i_slow
+
+  'Power the HFP01SC heaters.
+  SW12 (SW12_1, sw12_1_state)
+
+  'Measure voltage across the heater (V_Rf).
+  AM25T(V_Rf(1),NMBR_SHFP,mV200,SHF_HEATER_ANALOG_INPUT_S2,AM25T_DiffChan,-1,RTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,0.001,0)
+
+  'Maintain filtered values for calibration.
+  AvgRun (shf_mV_run(1), NMBR_SHFP, shf_mV(1), 10)
+  AvgRun (V_Rf_run(1),   NMBR_SHFP, V_Rf(1),   10)
+
+  'Begin HFP01SC calibration one minute into very CAL_INTERVAL minutes.
+  If (IfTime (1, CAL_INTERVAL, Min)) Then
+    shf_cal_on_f = TRUE
+    Move (shf_mV_0(1), NMBR_SHFP, shf_mV_run(1), NMBR_SHFP)
+    sw12_1_state = TRUE
+  EndIf
+
+  If (IfTime (4, CAL_INTERVAL, Min)) Then
+    Move (shf_mV_180(1), NMBR_SHFP, shf_mV_run(1), NMBR_SHFP)
+    Move (V_Rf_180(1), NMBR_SHFP, V_Rf_run(1), NMBR_SHFP)
+    sw12_1_state = FALSE
+  EndIf
+
+  'End HFP01SC calibration sequence.
+  If (IfTime(END_CAL, CAL_INTERVAL, Min)) Then
+    Move (shf_mV_end(1), NMBR_SHFP, shf_mV_run(1), NMBR_SHFP)
+    'Compute new HFP01SC calibration factors.
+    For i_slow = 1 To NMBR_SHFP
+      If ((V_Rf_180(i_slow) <> NaN) AND (shf_mV_0(i_slow) <> NaN) AND (shf_mV_180(i_slow)<> NaN)) Then
+      shf_plate_cal_S2(i_slow) = V_Rf_180(i_slow)*V_Rf_180(i_slow)*128.7/ABS (((shf_mV_0(i_slow)+shf_mV_end(i_slow))/2)-shf_mV_180(i_slow))
+      EndIf
+    Next i_slow
+    shf_cal_on_f = FALSE
+  EndIf
+
+  'LI190R quantum (PAR) sensor
+  AM25T(PAR_density_S,1,mV200,QUANTUM_ANALOG_INPUT,AM25T_DiffChan,-1,RTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
+  If (PAR_density_S <= 0) Then
+    PAR_density_S = 0
+  Else
+    PAR_density_S = QUANTUM_MULT*PAR_density_S + QUANTUM_OFFSET
+  EndIf
+
+  'CS655
+  For i_slow = 1 To 7
+    SDI12Recorder (cs655_raw_S1(1), CS655_SDI12_PORT_S1, CS655_SDI12_Address_S1+i_slow-1, "M!", 1, 0)
+    cs655_wc_S1(i_slow)   = cs655_raw_S1(1)
+    cs655_ec_S1(i_slow)   = cs655_raw_S1(2)
+    cs655_tmpr_S1(i_slow) = cs655_raw_S1(3)
+  Next i_slow        
+
+  For i_slow = 1 To 7
+    SDI12Recorder (cs655_raw_S2(1), CS655_SDI12_PORT_S2, CS655_SDI12_Address_S2+i_slow-1, "M!", 1, 0)
+    cs655_wc_S2(i_slow)   = cs655_raw_S2(1)
+    cs655_ec_S2(i_slow)   = cs655_raw_S2(2)
+    cs655_tmpr_S2(i_slow) = cs655_raw_S2(3)
+  Next i_slow        
+
+  'Save meterological data
+  CallTable RMet_1Min
+
+  'Save status data
+  CallTable Stats_30Min
+
+NextScan
+
+EndProg
