@@ -74,7 +74,7 @@ PipeLineMode
 ' Declare Constants
 '---------------------------------------------
 Const SCN_INTV                   = 3000          'Unique: measurement rate 100 ms (10 Hz), 200 ms (5 Hz), or 1000 ms (1 Hz)
-Const SLW_SCN_INTV               = 3000          'Unique: slow sequence measurement rate (ms) >3000 ms and <6000ms (Note: SDI-12 sensors too slow for sub-second intervals)
+Const SLW_SCN_INTV               = 30000          'Unique: slow sequence measurement rate (ms) >3000 ms and <6000ms (Note: SDI-12 sensors too slow for sub-second intervals)
 Const OUTPUT_INTV                = 30            'Unique: online flux data output interval (minutes).
 Const DAY_RMET_CRD               = 30            'Unique: number of days of Flux and Flux_Notes table data to store in each file on the card.  Number of files stored depends on card size.
 Const DAY_TSRS_CRD               = 1             'Unique: number of days of Time_Series table data to store in each file on the card (days). Number of files stored depends on card size.
