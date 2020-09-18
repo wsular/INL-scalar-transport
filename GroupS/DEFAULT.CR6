@@ -73,8 +73,8 @@ PipeLineMode
 '---------------------------------------------
 ' Declare Constants
 '---------------------------------------------
-Const SCN_INTV                   = 2000          'Unique: measurement rate 100 ms (10 Hz), 200 ms (5 Hz), or 1000 ms (1 Hz)
-Const SLW_SCN_INTV               = 30000          'Unique: slow sequence measurement rate (ms) >3000 ms and <6000ms (Note: SDI-12 sensors too slow for sub-second intervals)
+Const SCN_INTV                   = 10000          'Unique: measurement rate 100 ms (10 Hz), 200 ms (5 Hz), or 1000 ms (1 Hz)
+Const SLW_SCN_INTV               = 10000          'Unique: slow sequence measurement rate (ms) >3000 ms and <6000ms (Note: SDI-12 sensors too slow for sub-second intervals)
 Const OUTPUT_INTV                = 30            'Unique: online flux data output interval (minutes).
 Const DAY_RMET_CRD               = 30            'Unique: number of days of Flux and Flux_Notes table data to store in each file on the card.  Number of files stored depends on card size.
 Const DAY_TSRS_CRD               = 1             'Unique: number of days of Time_Series table data to store in each file on the card (days). Number of files stored depends on card size.
@@ -236,8 +236,10 @@ Units nmbr_clock_change = occurrences
 'Battery voltage and panel temp
 Public BattV
 Public PTemp_C
+Public RTemp_C
 Units  BattV = Volts
 Units  PTemp_C = degC
+Units  RTemp_C = degC
 
 Dim i_slow        As Long
 
@@ -276,6 +278,7 @@ DataTable (RMet_1Min, TRUE, -1)
   Sample (7, cs655_tmpr_S2(1),IEEE4)            'CS65X probe temperature.
 
   Average (1,PTemp_C,IEEE4,False)
+  Average (1,RTemp_C,IEEE4,False)
   Average (1,BattV,IEEE4,False)
 
 
@@ -313,6 +316,7 @@ DataTable (Stats_30Min, TRUE, -1)
   Average (7, cs655_tmpr_S2(1),IEEE4, False)            'CS65X probe temperature.
 
   Average (1,PTemp_C,IEEE4,False)
+  Average (1,RTemp_C,IEEE4,False)
   Average (1,BattV,IEEE4,False)
 
 EndTable
@@ -332,15 +336,31 @@ shf_plate_cal_S2(1) = 1000/SHFP_1_SENS_S2
 shf_plate_cal_S2(2) = 1000/SHFP_3_SENS_S2
 shf_plate_cal_S2(3) = 1000/SHFP_2_SENS_S2
 
+Move (cs655_wc_S1,7,NaN,1)
+Move (cs655_ec_S1,7,NaN,1)
+Move (cs655_tmpr_S1,7,NaN,1)
+Move (cs655_wc_S2,7,NaN,1)
+Move (cs655_ec_S2,7,NaN,1)
+Move (cs655_tmpr_S2,7,NaN,1)
+
 'Set 3.3 VDC for pps
 PortPairConfig (U1, 2)
 
-Scan (SLW_SCN_INTV,mSec,10,0)
+Scan (SLW_SCN_INTV,mSec,100,0)
   'GPS16X-HVS
   GPS (gps_data(1),GPS16X_COM,UTC_OFFSET*3600,MAX_CLOCK_DRIFT,nmea_sentence(1))
 
-  PanelTemp (PTemp_C,250) 'Measure data logger panel temperature  
+  PanelTemp (PTemp_C,ANALOG_INTEGRATION) 'Measure data logger panel temperature  
   Battery (BattV)         'Measure battery voltage.
+
+  'TCAV
+  AM25T(Tsoil(1),2,mV200C,TCAV_ANALOG_INPUT,AM25T_DiffChan,TypeE,RTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
+
+  'HFP01
+  AM25T(shf_plate_S1(1),NMBR_SHFP,mV200C,SHF_ANALOG_INPUT_S1,AM25T_DiffChan,-1,RTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
+  For i_slow = 1 To NMBR_SHFP
+    shf_plate_S1(i_slow) = shf_plate_S1(i_slow)*shf_plate_cal_S1(i_slow)
+  Next i_slow
 
   'SI-111
   'Measure SI111 body temperature
@@ -348,28 +368,11 @@ Scan (SLW_SCN_INTV,mSec,10,0)
   m_SI111 = m0_SI111 + m1_SI111*T_SI111_body + m2_SI111*T_SI111_body*T_SI111_body                         'T_SI111_body in C
   b_SI111 = b0_SI111 + b1_SI111*T_SI111_body + b2_SI111*T_SI111_body*T_SI111_body                         'T_SI111_body in C
 
-  VoltDiff (T_SI111_targeted, 1, mV200, SI111_ANALOG_INPUT, True, 0, ANALOG_INTEGRATION, 1, 0)
+  VoltDiff (T_SI111_targeted, 1, mV200C, SI111_ANALOG_INPUT, True, 0, ANALOG_INTEGRATION, 1, 0)
   T_SI111_targeted = ((T_SI111_body + T_0C_K)^4 + m_SI111*T_SI111_targeted + b_SI111)^0.25 - T_0C_K       'T_SI111_targeted in C
 
-  'LI190R quantum (PAR) sensor
-  AM25T(PAR_density_S,1,mV200,QUANTUM_ANALOG_INPUT,AM25T_DiffChan,-1,PTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
-  If (PAR_density_S <= 0) Then
-    PAR_density_S = 0
-  Else
-    PAR_density_S = QUANTUM_MULT*PAR_density_S + QUANTUM_OFFSET
-  EndIf
-
-  'TCAV
-  AM25T(Tsoil(1),2,mV200C,TCAV_ANALOG_INPUT,AM25T_DiffChan,TypeE,PTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
-
-  'HFP01
-  AM25T(shf_plate_S1(1),NMBR_SHFP,mV200C,SHF_ANALOG_INPUT_S1,AM25T_DiffChan,-1,PTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
-  For i_slow = 1 To NMBR_SHFP
-    shf_plate_S1(i_slow) = shf_plate_S1(i_slow)*shf_plate_cal_S1(i_slow)
-  Next i_slow
-
   'HFP01SC
-  AM25T(shf_mV(1),NMBR_SHFP,mV200C,SHF_ANALOG_INPUT_S2,AM25T_DiffChan,-1,PTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
+  AM25T(shf_mV(1),NMBR_SHFP,mV200C,SHF_ANALOG_INPUT_S2,AM25T_DiffChan,-1,RTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
 
   'Apply HFP01SC soil heat flux plate calibration.
   For i_slow = 1 To NMBR_SHFP
@@ -380,7 +383,7 @@ Scan (SLW_SCN_INTV,mSec,10,0)
   SW12 (SW12_1, sw12_1_state)
 
   'Measure voltage across the heater (V_Rf).
-  AM25T(V_Rf(1),NMBR_SHFP,mV200C,SHF_HEATER_ANALOG_INPUT_S2,AM25T_DiffChan,-1,PTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,0.001,0)
+  AM25T(V_Rf(1),NMBR_SHFP,mV200C,SHF_HEATER_ANALOG_INPUT_S2,AM25T_DiffChan,-1,RTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,0.001,0)
 
   'Maintain filtered values for calibration.
   AvgRun (shf_mV_run(1), NMBR_SHFP, shf_mV(1), 10)
@@ -411,6 +414,14 @@ Scan (SLW_SCN_INTV,mSec,10,0)
     shf_cal_on_f = FALSE
   EndIf
 
+  'LI190R quantum (PAR) sensor
+  AM25T(PAR_density_S,1,mV200C,QUANTUM_ANALOG_INPUT,AM25T_DiffChan,-1,RTemp_C,AM25T_ClkPort,AM25T_ResPort,AM25T_ExChan,True,0,ANALOG_INTEGRATION,1,0)
+  If (PAR_density_S <= 0) Then
+    PAR_density_S = 0
+  Else
+    PAR_density_S = QUANTUM_MULT*PAR_density_S + QUANTUM_OFFSET
+  EndIf
+
   'CS655
   For i_slow = 1 To 7
     SDI12Recorder (cs655_raw_S1(1), CS655_SDI12_PORT_S1, CS655_SDI12_Address_S1+i_slow-1, "M!", 1, 0)
@@ -431,6 +442,7 @@ Scan (SLW_SCN_INTV,mSec,10,0)
 
   'Save status data
   CallTable Stats_30Min
+
 
 NextScan
 
