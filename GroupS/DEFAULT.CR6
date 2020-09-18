@@ -347,9 +347,6 @@ Move (cs655_tmpr_S2,7,NaN,1)
 PortPairConfig (U1, 2)
 
 Scan (SLW_SCN_INTV,mSec,100,0)
-  'GPS16X-HVS
-  GPS (gps_data(1),GPS16X_COM,UTC_OFFSET*3600,MAX_CLOCK_DRIFT,nmea_sentence(1))
-
   PanelTemp (PTemp_C,ANALOG_INTEGRATION) 'Measure data logger panel temperature  
   Battery (BattV)         'Measure battery voltage.
 
@@ -443,6 +440,8 @@ Scan (SLW_SCN_INTV,mSec,100,0)
   'Save status data
   CallTable Stats_30Min
 
+  'GPS16X-HVS
+  GPS (gps_data(1),GPS16X_COM,UTC_OFFSET*3600,MAX_CLOCK_DRIFT,nmea_sentence(1))
 
 NextScan
 

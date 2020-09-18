@@ -627,9 +627,6 @@ PortPairConfig (C1, 2)
 'Set SDM clock speed
 SDMSpeed (SDM_PER)
 Scan (SCN_INTV, mSec, SCAN_BUFFER_SIZE, 0)
-  'GPS16X-HVS
-  GPS (gps_data(1),GPS16X_COM,UTC_OFFSET*3600,MAX_CLOCK_DRIFT,nmea_sentence(1))
-
   'Trigger all SDM instruments to make measurements
   SDMTrigger()
   
@@ -775,6 +772,9 @@ Scan (SLW_SCN_INTV,mSec,10,0)
   If (RH_B3 > 100 AND RH_B3 <103) Then (RH_B3 =100)
   If (RH_B2 > 100 AND RH_B2 <103) Then (RH_B2 =100)
   If (RH_B1 > 100 AND RH_B1 <103) Then (RH_B1 =100)
+
+  'GPS16X-HVS
+  GPS (gps_data(1),GPS16X_COM,UTC_OFFSET*3600,MAX_CLOCK_DRIFT,nmea_sentence(1))
 
 NextScan
 
