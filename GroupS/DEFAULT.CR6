@@ -149,7 +149,7 @@ Dim sw12_1_state As Boolean              'State of the switched 12Vdc port 1.
 'GPS                                        x  1
 Const GPS16X_COM = COMU1        'Serial port for GPS16X with PPS
 Const UTC_OFFSET = -8        'local time offset from UTC, in hours
-Const MAX_CLOCK_DRIFT = 1.0  'max clock drift permitted before setting clock, in msec
+Const MAX_CLOCK_DRIFT = 20  'max clock drift permitted before setting clock, in msec
 
 
 '--------------------------------------------------------
