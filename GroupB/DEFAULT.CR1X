@@ -130,7 +130,7 @@ Const RH_OFFSET        As Float    = 0.0              'Unique: RH offset HC2S3 =
 
 'GPS                                        x  1
 Const GPS16X_COM = ComC1      'Serial port for GPS16X with PPS
-Const UTC_OFFSET = -8        'local time offset from UTC, in hours
+Const UTC_OFFSET = -7        'local time offset from UTC, in hours = Mountain Standard Time
 Const MAX_CLOCK_DRIFT = 20  'max clock drift permitted before setting clock, in msec
 
 
